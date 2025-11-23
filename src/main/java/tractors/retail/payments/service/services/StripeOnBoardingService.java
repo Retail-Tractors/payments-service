@@ -28,7 +28,7 @@ public class StripeOnBoardingService {
     public String createConnectedAccount(String ownerEmail, String ownerName) throws StripeException {
         Seller owner = sellerRepository.findByEmail(ownerEmail)
                 .orElseGet(() -> sellerRepository.save(
-                        Seller.builder().email(ownerEmail).name(ownerName).verified(false).build()
+                        Seller.builder().email(ownerEmail).name(ownerName).verified(false).status("PENDING"). build()
                 ));
 
         if (owner.getStripeAccountId() != null) {
@@ -37,7 +37,7 @@ public class StripeOnBoardingService {
 
         AccountCreateParams params = AccountCreateParams.builder()
                 .setType(AccountCreateParams.Type.EXPRESS)
-                .setCountry("PT") // Change if needed
+                .setCountry("PT")
                 .setEmail(ownerEmail)
                 .build();
 
@@ -62,12 +62,35 @@ public class StripeOnBoardingService {
     }
 
     public void markAccountVerified(String accountId) {
-        sellerRepository.findAll().stream()
-                .filter(o -> accountId.equals(o.getStripeAccountId()))
-                .findFirst()
-                .ifPresent(owner -> {
-                    owner.setVerified(true);
-                    sellerRepository.save(owner);
+        sellerRepository.findByStripeAccountId(accountId)
+                .ifPresent(seller -> {
+                    seller.setVerified(true);
+                    seller.setStatus("ACTIVE");
+                    sellerRepository.save(seller);
+                });
+    }
+
+    public void markAccountPendingVerification(String accountId) {
+        sellerRepository.findByStripeAccountId(accountId)
+                .ifPresent(seller -> {
+                    seller.setStatus("PENDING");
+                    sellerRepository.save(seller);
+                });
+    }
+
+    public void markAccountDisabled(String accountId) {
+        sellerRepository.findByStripeAccountId(accountId)
+                .ifPresent(seller -> {
+                    seller.setStatus("DISABLED");
+                    sellerRepository.save(seller);
+                });
+    }
+
+    public void markAccountActive(String accountId) {
+        sellerRepository.findByStripeAccountId(accountId)
+                .ifPresent(seller -> {
+                    seller.setStatus("ACTIVE");
+                    sellerRepository.save(seller);
                 });
     }
 }

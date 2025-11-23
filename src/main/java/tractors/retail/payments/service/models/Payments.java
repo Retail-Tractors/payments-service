@@ -4,29 +4,31 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "posts")
+@Table(name ="payments")
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
-public class Post {
+public class Payments {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String title;
-    private String description;
-    private long price;
+    // JOIN to posts table
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "post_id", nullable = false)
+    private Post post;
+
+    @Column(name = "buyer_email")
+    private String buyerEmail;
+
+    @Column(name = "stripe_payment_intent_id")
+    private String stripePaymentIntentId;
+
+    private Long amount;
     private String currency;
     private String status;
 
     @Column(name = "created_at", updatable = false, insertable = false)
     private java.time.LocalDateTime createdAt;
-
-    @Column(name = "updated_at")
-    private java.time.LocalDateTime updatedAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "seller_id", nullable = false)
-    private Seller  seller;
 }

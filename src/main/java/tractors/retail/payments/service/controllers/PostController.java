@@ -1,7 +1,5 @@
 package tractors.retail.payments.service.controllers;
 
-import com.stripe.model.checkout.Session;
-import com.stripe.param.checkout.SessionCreateParams;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -13,7 +11,6 @@ import tractors.retail.payments.service.dto.PostsResponse;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/posts")
@@ -82,54 +79,11 @@ public class PostController {
 
     @GetMapping("/{id:[0-9]+}/buy")
     public ResponseEntity<Map<String, String>> buyPost(@PathVariable Long id) {
-        // Get the post
-        Optional<Post> optionalPost = postService.getPostById(id);
-        if (optionalPost.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-        Post post = optionalPost.get();
-
-        // Get the seller stripe account
-        String sellerStripeAccountId = post.getSeller().getStripeAccountId();
-        if (sellerStripeAccountId == null || sellerStripeAccountId.isEmpty()) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", "sellerStripeAccountId is null or empty"));
-        }
-
-        // Create checkout link
-//        Stripe.apiKey = stripeSecretKey;
         try {
-            SessionCreateParams params = SessionCreateParams.builder()
-                    .setMode(SessionCreateParams.Mode.PAYMENT)
-                    .setSuccessUrl("http://localhost:8080/api/posts/success?postId=" + post.getId())
-                    .setCancelUrl("http://localhost:8080/api/posts/cancel?postId=" + post.getId())
-                    .addLineItem(
-                            SessionCreateParams.LineItem.builder()
-                                    .setQuantity(1L)
-                                    .setPriceData(
-                                            SessionCreateParams.LineItem.PriceData.builder()
-                                                    .setCurrency(post.getCurrency())
-                                                    .setUnitAmount(post.getPrice()*100)
-                                                    .setProductData(
-                                                            SessionCreateParams.LineItem.PriceData.ProductData.builder()
-                                                                    .setName(post.getTitle())
-                                                                    .setDescription(post.getDescription())
-                                                                    .build()
-                                                    ).build()
-
-                                    ).build()
-                    )
-                    .setPaymentIntentData(
-                            SessionCreateParams.PaymentIntentData.builder()
-                                    .setApplicationFeeAmount(post.getPrice()*10)
-                                    .setTransferData(
-                                            SessionCreateParams.PaymentIntentData.TransferData.builder()
-                                                    .setDestination(sellerStripeAccountId)
-                                                    .build()
-                                    ).build()
-                    ).build();
-
-            Session session = Session.create(params);
-            return ResponseEntity.ok(Map.of("url", session.getUrl()));
+            String checkoutUrl = postService.createCheckoutSession(id);
+            return ResponseEntity.ok(Map.of("url", checkoutUrl));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
