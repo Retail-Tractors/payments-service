@@ -13,7 +13,7 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/posts")
+@RequestMapping("/payments/posts")
 @RequiredArgsConstructor
 public class PostController {
 

@@ -5,7 +5,7 @@ import org.springframework.web.bind.annotation.*;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
 
 @RestController
-@RequestMapping("/api/stripe")
+@RequestMapping("/payments/stripe")
 public class StripeOnBoardingController {
 
     private final StripeOnBoardingService stripeService;

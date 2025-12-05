@@ -15,7 +15,7 @@ import tractors.retail.payments.service.services.StripeOnBoardingService;
 import tractors.retail.payments.service.services.PaymentsService;
 
 @RestController
-@RequestMapping("/api/stripe/webhook")
+@RequestMapping("/payments/stripe/webhook")
 public class StripeWebhookController {
 
     private final StripeOnBoardingService stripeService;
