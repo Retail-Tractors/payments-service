@@ -1,8 +1,10 @@
 package tractors.retail.payments.service.filter;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jws;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureException;
+import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,19 +14,22 @@ import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import javax.crypto.SecretKey;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     @Value("${JWT_SECRET}")
-    private String JWT_SECRET;
+    private String jwtSecret;
 
     @Override
-    protected void doFilterInternal(HttpServletRequest request,
-                                    @NonNull HttpServletResponse response,
-                                    @NonNull FilterChain filterChain)
-            throws ServletException, IOException {
+    protected void doFilterInternal(
+            @NonNull HttpServletRequest request,
+            @NonNull HttpServletResponse response,
+            @NonNull FilterChain filterChain
+    ) throws ServletException, IOException {
 
         String authHeader = request.getHeader("Authorization");
 
@@ -34,20 +39,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        String token = authHeader.substring(7); // remove "Bearer "
+        String token = authHeader.substring(7);
 
         try {
-            Claims claims = Jwts.parser()
-                    .setSigningKey(JWT_SECRET.getBytes())
-                    .parseClaimsJws(token)
-                    .getBody();
+            SecretKey key = Keys.hmacShaKeyFor(
+                    jwtSecret.getBytes(StandardCharsets.UTF_8)
+            );
 
-            // Optionally, store claims in request attribute to access in controllers
+            Jws<Claims> jws = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+
+            Claims claims = jws.getPayload();
+
             request.setAttribute("userId", claims.get("id"));
             request.setAttribute("email", claims.get("email"));
             request.setAttribute("name", claims.get("name"));
 
-        } catch (SignatureException | io.jsonwebtoken.ExpiredJwtException e) {
+        } catch (JwtException e) {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.getWriter().write("Invalid or expired token");
             return;
