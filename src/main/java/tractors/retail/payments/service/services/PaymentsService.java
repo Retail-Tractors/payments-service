@@ -8,8 +8,6 @@ import tractors.retail.payments.service.models.Post;
 import tractors.retail.payments.service.repository.PaymentsRepository;
 import tractors.retail.payments.service.repository.PostRepository;
 
-import java.time.LocalDateTime;
-
 @Service
 public class PaymentsService {
     private final PaymentsRepository paymentsRepository;

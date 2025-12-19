@@ -8,4 +8,5 @@ import java.util.Optional;
 public interface SellerRepository extends JpaRepository<Seller, Long> {
     Optional<Seller> findByEmail(String email);
     Optional<Seller> findByStripeAccountId(String stripeAccountId);
+    Optional<Seller> findByUserId(Integer userId);
 }

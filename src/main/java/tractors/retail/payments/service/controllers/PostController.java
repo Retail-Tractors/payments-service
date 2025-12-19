@@ -67,7 +67,7 @@ public class PostController {
 
     @PostMapping
     public ResponseEntity<Post> createPost(@RequestBody Post post, HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("userId");
+        Integer userId = (Integer) request.getAttribute("userId");
         return ResponseEntity.ok(postService.createPost(post, userId));
     }
 

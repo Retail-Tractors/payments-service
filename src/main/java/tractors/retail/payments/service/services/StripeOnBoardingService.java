@@ -25,7 +25,7 @@ public class StripeOnBoardingService {
         this.sellerRepository = ownerRepository;
     }
 
-    public String createConnectedAccount(Long ownerId, String ownerEmail, String ownerName) throws StripeException {
+    public String createConnectedAccount(Integer ownerId, String ownerEmail, String ownerName) throws StripeException {
         Seller owner = sellerRepository.findByEmail(ownerEmail)
                 .orElseGet(() -> sellerRepository.save(
                         Seller.builder().userId(ownerId).email(ownerEmail).name(ownerName).verified(false).status("PENDING"). build()

@@ -18,7 +18,7 @@ public class StripeOnBoardingController {
     @PostMapping("/onboard")
     public ResponseEntity<?> onboardOwner(HttpServletRequest request) {
         try {
-            Long userId = (Long) request.getAttribute("userId");
+            Integer userId = (Integer) request.getAttribute("userId");
             String email = (String) request.getAttribute("email");
             String name =  (String) request.getAttribute("name");
 

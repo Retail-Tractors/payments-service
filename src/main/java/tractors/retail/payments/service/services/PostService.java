@@ -27,8 +27,8 @@ public class PostService {
         return postRepository.findById(id);
     }
 
-    public Post createPost(Post post, Long userId) {
-        Seller seller = sellerRepository.findById(userId)
+    public Post createPost(Post post, Integer userId) {
+        Seller seller = sellerRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Seller not found"));
 
         if (seller.getStatus().equals("DISABLED")) {
@@ -64,8 +64,8 @@ public class PostService {
 
         SessionCreateParams params = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.PAYMENT)
-                .setSuccessUrl("http://localhost:8080/api/posts/success?postId=" + post.getId())
-                .setCancelUrl("http://localhost:8080/api/posts/cancel?postId=" + post.getId())
+                .setSuccessUrl("http://localhost:8081/payments/posts/success?postId=" + post.getId())
+                .setCancelUrl("http://localhost:8081/payments/posts/cancel?postId=" + post.getId())
                 .addLineItem(
                         SessionCreateParams.LineItem.builder()
                                 .setQuantity(1L)

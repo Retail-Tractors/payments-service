@@ -24,7 +24,10 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
 
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/public/**").permitAll()
+                        .requestMatchers("/payments/stripe/webhook").permitAll()
+                        .requestMatchers("/payments/stripe/success").permitAll()
+                        .requestMatchers("/payments/posts/success").permitAll()
+                        .requestMatchers("/payments/posts/cancel").permitAll()
                         .anyRequest().authenticated()
                 )
 
