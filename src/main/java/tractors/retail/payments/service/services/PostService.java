@@ -27,8 +27,8 @@ public class PostService {
         return postRepository.findById(id);
     }
 
-    public Post createPost(Post post, Long sellerId) {
-        Seller seller = sellerRepository.findById(sellerId)
+    public Post createPost(Post post, Long userId) {
+        Seller seller = sellerRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Seller not found"));
 
         if (seller.getStatus().equals("DISABLED")) {

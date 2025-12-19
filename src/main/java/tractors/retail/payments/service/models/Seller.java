@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
-
 @Entity
 @Table(name = "sellers")
 @Data
@@ -18,7 +16,9 @@ public class Seller {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    private Long userId; // Retrieved from token, links to the users table from users-service
 
+    // TODO: These information is already stored in users table. I could get this from the token payload instead of storing it here.
     private String name;
     private String email;
 

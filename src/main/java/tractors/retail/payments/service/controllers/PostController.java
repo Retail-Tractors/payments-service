@@ -1,5 +1,6 @@
 package tractors.retail.payments.service.controllers;
 
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,8 +66,9 @@ public class PostController {
     }
 
     @PostMapping
-    public ResponseEntity<Post> createPost(@RequestBody Post post, @RequestParam Long sellerId) {
-        return ResponseEntity.ok(postService.createPost(post, sellerId));
+    public ResponseEntity<Post> createPost(@RequestBody Post post, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("userId");
+        return ResponseEntity.ok(postService.createPost(post, userId));
     }
 
     @GetMapping("/{id:[0-9]+}")

@@ -1,5 +1,6 @@
 package tractors.retail.payments.service.controllers;
 
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
@@ -15,10 +16,13 @@ public class StripeOnBoardingController {
     }
 
     @PostMapping("/onboard")
-    public ResponseEntity<?> onboardOwner(@RequestParam String email,
-                                          @RequestParam String name) {
+    public ResponseEntity<?> onboardOwner(HttpServletRequest request) {
         try {
-            String accountId = stripeService.createConnectedAccount(email, name);
+            Long userId = (Long) request.getAttribute("userId");
+            String email = (String) request.getAttribute("email");
+            String name =  (String) request.getAttribute("name");
+
+            String accountId = stripeService.createConnectedAccount(userId, email, name);
             String onboardingLink = stripeService.generateOnboardingLink(accountId);
             return ResponseEntity.ok(onboardingLink);
         } catch (Exception e) {
@@ -26,6 +30,7 @@ public class StripeOnBoardingController {
         }
     }
 
+    // Simple endpoint to show feedback to user on the browser
     @GetMapping("/success")
     public ResponseEntity<String> handleSuccess() {
         String html = """
@@ -40,7 +45,7 @@ public class StripeOnBoardingController {
               </head>
               <body>
                 <h1>Onboarding Complete!</h1>
-                <p>Your Stripe account setup is done. You can safely close this page or return to the app.</p>
+                <p>Your Stripe account setup is done. You can safely close this page and return to the app.</p>
               </body>
             </html>
         """;
