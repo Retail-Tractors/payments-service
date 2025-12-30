@@ -28,6 +28,7 @@ public class PostService {
     }
 
     public Post createPost(Post post, Integer userId) {
+        
         Seller seller = sellerRepository.findByUserId(userId)
                 .orElseThrow(() -> new RuntimeException("Seller not found"));
 

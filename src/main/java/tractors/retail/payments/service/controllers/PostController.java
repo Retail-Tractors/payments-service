@@ -1,10 +1,11 @@
 package tractors.retail.payments.service.controllers;
 
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
 import tractors.retail.payments.service.models.Post;
 import tractors.retail.payments.service.services.PostService;
@@ -66,8 +67,8 @@ public class PostController {
     }
 
     @PostMapping
-    public ResponseEntity<Post> createPost(@RequestBody Post post, HttpServletRequest request) {
-        Integer userId = (Integer) request.getAttribute("userId");
+    public ResponseEntity<Post> createPost(@RequestBody Post post, @AuthenticationPrincipal Jwt jwt) {
+        Integer userId = Integer.parseInt(jwt.getSubject());
         return ResponseEntity.ok(postService.createPost(post, userId));
     }
 

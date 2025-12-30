@@ -3,6 +3,8 @@ package tractors.retail.payments.service.controllers;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
 
 @RestController
@@ -16,9 +18,9 @@ public class StripeOnBoardingController {
     }
 
     @PostMapping("/onboard")
-    public ResponseEntity<?> onboardOwner(HttpServletRequest request) {
+    public ResponseEntity<?> onboardOwner(HttpServletRequest request, @AuthenticationPrincipal Jwt jwt) {
         try {
-            Integer userId = (Integer) request.getAttribute("userId");
+            Integer userId = Integer.parseInt(jwt.getSubject());
             String email = (String) request.getAttribute("email");
             String name =  (String) request.getAttribute("name");
 
