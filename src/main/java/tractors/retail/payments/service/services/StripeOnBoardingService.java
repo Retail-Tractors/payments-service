@@ -1,19 +1,25 @@
 package tractors.retail.payments.service.services;
 
-import tractors.retail.payments.service.models.Seller;
-import tractors.retail.payments.service.repository.SellerRepository;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
 import com.stripe.exception.StripeException;
 import com.stripe.model.Account;
 import com.stripe.model.AccountLink;
 import com.stripe.param.AccountCreateParams;
 import com.stripe.param.AccountLinkCreateParams;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Service;
+
+import tractors.retail.payments.service.models.Seller;
+import tractors.retail.payments.service.rabbitmq.EmailEventPublisher;
+import tractors.retail.payments.service.repository.SellerRepository;
 
 @Service
 public class StripeOnBoardingService {
 
     private final SellerRepository sellerRepository;
+    private final EmailEventPublisher emailPublisher;
 
     @Value("${stripe.refresh-url}")
     private String refreshUrl;
@@ -21,15 +27,25 @@ public class StripeOnBoardingService {
     @Value("${stripe.return-url}")
     private String returnUrl;
 
-    public StripeOnBoardingService(SellerRepository ownerRepository) {
+    public StripeOnBoardingService(
+            SellerRepository ownerRepository,
+            EmailEventPublisher emailPublisher // >>> ADDED FOR RABBITMQ <<<
+    ) {
         this.sellerRepository = ownerRepository;
+        this.emailPublisher = emailPublisher; // >>> ADDED FOR RABBITMQ <<<
     }
 
     public String createConnectedAccount(Integer ownerId, String ownerEmail, String ownerName) throws StripeException {
         Seller owner = sellerRepository.findByEmail(ownerEmail)
                 .orElseGet(() -> sellerRepository.save(
-                        Seller.builder().userId(ownerId).email(ownerEmail).name(ownerName).verified(false).status("PENDING"). build()
-                ));
+                Seller.builder()
+                        .userId(ownerId)
+                        .email(ownerEmail)
+                        .name(ownerName)
+                        .verified(false)
+                        .status("PENDING")
+                        .build()
+        ));
 
         if (owner.getStripeAccountId() != null) {
             return owner.getStripeAccountId();
@@ -86,11 +102,29 @@ public class StripeOnBoardingService {
                 });
     }
 
+    public String testEmail() {
+        emailPublisher.publish(Map.of(
+                "type", "TEST_EVENT",
+                "to", "teu_email@gmail.com",
+                "subject", "Teste RabbitMQ",
+                "message", "Se recebeste isto, o RabbitMQ funciona 🎉"
+        ));
+        return "OK";
+    }
+
     public void markAccountActive(String accountId) {
         sellerRepository.findByStripeAccountId(accountId)
                 .ifPresent(seller -> {
                     seller.setStatus("ACTIVE");
                     sellerRepository.save(seller);
+
+                    // FOR RABBITMQ <<<
+                    emailPublisher.publish(Map.of(
+                            "type", "SELLER_ONBOARDED",
+                            "to", seller.getEmail(),
+                            "subject", "Welcome to Retail Tractors",
+                            "message", "Your seller account is ready to receive payments."
+                    ));
                 });
     }
 }

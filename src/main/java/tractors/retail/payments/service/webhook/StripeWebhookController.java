@@ -1,23 +1,30 @@
 package tractors.retail.payments.service.webhook;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import com.stripe.exception.SignatureVerificationException;
-import com.stripe.model.Event;
-import com.stripe.model.Account;
-import com.stripe.model.Capability;
-import com.stripe.model.PaymentIntent;
-import com.stripe.net.Webhook;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
-
-import tractors.retail.payments.service.config.StripeConfig;
-import tractors.retail.payments.service.services.StripeOnBoardingService;
-import tractors.retail.payments.service.services.PaymentsService;
-import tractors.retail.payments.service.services.PostService;
-
 import java.util.HashMap;
 import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Account;
+import com.stripe.model.Capability;
+import com.stripe.model.Event;
+import com.stripe.model.PaymentIntent;
+import com.stripe.net.Webhook;
+
+import tractors.retail.payments.service.config.StripeConfig;
+import tractors.retail.payments.service.rabbitmq.EmailEventPublisher;
+import tractors.retail.payments.service.services.PaymentsService;
+import tractors.retail.payments.service.services.PostService;
+import tractors.retail.payments.service.services.StripeOnBoardingService;
+// <<< ADDED FOR RABBITMQ <<<
 
 @RestController
 @RequestMapping("/payments/stripe/webhook")
@@ -31,10 +38,18 @@ public class StripeWebhookController {
     private StripeConfig stripeConfig;
     private final PostService postService;
 
-    public StripeWebhookController(StripeOnBoardingService stripeService, PaymentsService paymentsService, PostService postService) {
+    private final EmailEventPublisher emailPublisher;
+
+    public StripeWebhookController(
+            StripeOnBoardingService stripeService,
+            PaymentsService paymentsService,
+            PostService postService,
+            EmailEventPublisher emailPublisher
+    ) {
         this.stripeService = stripeService;
         this.paymentsService = paymentsService;
         this.postService = postService;
+        this.emailPublisher = emailPublisher;
         this.restTemplate = new RestTemplate(); // Cliente HTTP para chamar o Bookings
     }
 
@@ -50,7 +65,6 @@ public class StripeWebhookController {
         }
 
         // System.out.println("Webhook recebido: " + event.getType());
-
         // Lida com os diferentes tipos de eventos
         switch (event.getType()) {
             case "account.updated":
@@ -81,9 +95,13 @@ public class StripeWebhookController {
     }
 
     private void handleAccountUpdated(Account account) {
-        if (account == null) {return;}
+        if (account == null) {
+            return;
+        }
         var requirements = account.getRequirements();
-        if (requirements == null) {return;}
+        if (requirements == null) {
+            return;
+        }
         String accountId = account.getId();
 
         if (Boolean.TRUE.equals(account.getDetailsSubmitted())) {
@@ -101,10 +119,12 @@ public class StripeWebhookController {
     }
 
     private void handleCapabilityUpdated(Capability capability) {
-        if (capability == null) {return;}
+        if (capability == null) {
+            return;
+        }
 
         String accountId = capability.getAccount();
-        String status = capability.getStatus(); 
+        String status = capability.getStatus();
 
         switch (status) {
             case "active":
@@ -120,7 +140,9 @@ public class StripeWebhookController {
     }
 
     private void handlePaymentIntentSucceeded(PaymentIntent paymentIntent) {
-        if (paymentIntent == null) return;
+        if (paymentIntent == null) {
+            return;
+        }
 
         String paymentIntentId = paymentIntent.getId();
         Long amount = paymentIntent.getAmountReceived();
@@ -129,7 +151,7 @@ public class StripeWebhookController {
         // 1. Tenta obter o booking_id dos metadados para atualizar a reserva
         Map<String, String> metadata = paymentIntent.getMetadata();
         String bookingId = metadata.get("booking_id");
-        
+
         if (bookingId != null) {
             notifyBookingService(bookingId, paymentIntentId, "PAID", "Payment successful via Stripe");
         } else {
@@ -146,6 +168,16 @@ public class StripeWebhookController {
 
                 postService.updatePostStatus(postId, "COMPLETED");
 
+                // FOR RABBITMQ
+                if (buyerEmail != null) {
+                    emailPublisher.publish(Map.of(
+                            "type", "PAYMENT_SUCCEEDED",
+                            "to", buyerEmail,
+                            "subject", "Payment successful",
+                            "message", "Your payment was processed successfully."
+                    ));
+                }
+
             } catch (Exception e) {
                 System.out.println("Failed to create payment record: " + e.getMessage());
             }
@@ -153,15 +185,17 @@ public class StripeWebhookController {
     }
 
     private void handlePaymentIntentFailed(PaymentIntent paymentIntent) {
-        if (paymentIntent == null) return;
+        if (paymentIntent == null) {
+            return;
+        }
 
         String paymentIntentId = paymentIntent.getId();
         String errorMessage = "Unknown error";
-        
+
         if (paymentIntent.getLastPaymentError() != null) {
             errorMessage = paymentIntent.getLastPaymentError().getMessage();
         }
-        
+
         Map<String, String> metadata = paymentIntent.getMetadata();
         String bookingId = metadata.get("booking_id");
 
@@ -175,6 +209,17 @@ public class StripeWebhookController {
         if (postIdStr == null) {
             Long postId = Long.valueOf(postIdStr);
             postService.updatePostStatus(postId, "FAILED");
+        }
+
+        // FOR RABBITMQ
+        String buyerEmail = paymentIntent.getReceiptEmail();
+        if (buyerEmail != null) {
+            emailPublisher.publish(Map.of(
+                    "type", "PAYMENT_FAILED",
+                    "to", buyerEmail,
+                    "subject", "Payment failed",
+                    "message", "Your payment could not be processed. Please try again."
+            ));
         }
     }
 
