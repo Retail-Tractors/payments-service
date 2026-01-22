@@ -4,6 +4,8 @@ import com.stripe.model.checkout.Session;
 import com.stripe.param.checkout.SessionCreateParams;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import tractors.retail.payments.service.models.Post;
 import tractors.retail.payments.service.models.Seller;
 import tractors.retail.payments.service.repository.PostRepository;
@@ -42,6 +44,16 @@ public class PostService {
 
     public void deletePost(Long id) {
         postRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void updatePostStatus(Long postId, String newStatus) {
+        Post post = postRepository.findById(postId)
+                .orElseThrow(() -> new RuntimeException("Post not found"));
+        
+        post.setStatus(newStatus);
+        post.setUpdatedAt(java.time.LocalDateTime.now());
+        postRepository.save(post);
     }
 
     public String createCheckoutSession(Long postId, String bookingId) throws Exception {

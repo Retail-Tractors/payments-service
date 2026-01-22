@@ -14,6 +14,7 @@ import org.springframework.web.client.RestTemplate;
 import tractors.retail.payments.service.config.StripeConfig;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
 import tractors.retail.payments.service.services.PaymentsService;
+import tractors.retail.payments.service.services.PostService;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,10 +29,12 @@ public class StripeWebhookController {
 
     @Autowired
     private StripeConfig stripeConfig;
+    private final PostService postService;
 
-    public StripeWebhookController(StripeOnBoardingService stripeService, PaymentsService paymentsService) {
+    public StripeWebhookController(StripeOnBoardingService stripeService, PaymentsService paymentsService, PostService postService) {
         this.stripeService = stripeService;
         this.paymentsService = paymentsService;
+        this.postService = postService;
         this.restTemplate = new RestTemplate(); // Cliente HTTP para chamar o Bookings
     }
 
@@ -140,6 +143,9 @@ public class StripeWebhookController {
                 Long postId = Long.valueOf(postIdStr);
                 String buyerEmail = paymentIntent.getReceiptEmail();
                 paymentsService.createPayment(postId, buyerEmail, paymentIntentId, amount, currency);
+
+                postService.updatePostStatus(postId, "COMPLETED");
+
             } catch (Exception e) {
                 System.out.println("Failed to create payment record: " + e.getMessage());
             }
