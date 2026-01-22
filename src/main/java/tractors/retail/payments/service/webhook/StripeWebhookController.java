@@ -9,10 +9,14 @@ import com.stripe.model.PaymentIntent;
 import com.stripe.net.Webhook;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
 import tractors.retail.payments.service.config.StripeConfig;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
 import tractors.retail.payments.service.services.PaymentsService;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/payments/stripe/webhook")
@@ -20,13 +24,15 @@ public class StripeWebhookController {
 
     private final StripeOnBoardingService stripeService;
     private final PaymentsService paymentsService;
+    private final RestTemplate restTemplate;
 
     @Autowired
     private StripeConfig stripeConfig;
 
-    public StripeWebhookController(StripeOnBoardingService stripeService,  PaymentsService paymentsService) {
+    public StripeWebhookController(StripeOnBoardingService stripeService, PaymentsService paymentsService) {
         this.stripeService = stripeService;
         this.paymentsService = paymentsService;
+        this.restTemplate = new RestTemplate(); // Cliente HTTP para chamar o Bookings
     }
 
     @PostMapping
@@ -34,15 +40,17 @@ public class StripeWebhookController {
         String webhookSecret = stripeConfig.getWebhookSecret();
         Event event;
         try {
-            // Try to read webhook event
+            // Tenta validar a assinatura do evento (segurança)
             event = Webhook.constructEvent(payload, sigHeader, webhookSecret);
         } catch (SignatureVerificationException e) {
             return ResponseEntity.status(400).body("Invalid signature");
         }
-        // Handle different event types
+
+        // System.out.println("Webhook recebido: " + event.getType());
+
+        // Lida com os diferentes tipos de eventos
         switch (event.getType()) {
             case "account.updated":
-                // create var account received from the webhook, if fails account=null
                 Account account = (Account) event.getDataObjectDeserializer().getObject().orElse(null);
                 handleAccountUpdated(account);
                 return ResponseEntity.ok("Success");
@@ -53,44 +61,38 @@ public class StripeWebhookController {
                 return ResponseEntity.ok("Success");
 
             case "payment_intent.succeeded":
-                PaymentIntent paymentIntent = (PaymentIntent) event.getDataObjectDeserializer().getObject().orElse(null);
-                handlePaymentIntentSucceeded(paymentIntent);
+                PaymentIntent paymentIntentSuccess = (PaymentIntent) event.getDataObjectDeserializer().getObject().orElse(null);
+                handlePaymentIntentSucceeded(paymentIntentSuccess);
+                return ResponseEntity.ok("Success");
+
+            case "payment_intent.payment_failed":
+                PaymentIntent paymentIntentFailed = (PaymentIntent) event.getDataObjectDeserializer().getObject().orElse(null);
+                handlePaymentIntentFailed(paymentIntentFailed);
                 return ResponseEntity.ok("Success");
 
             default:
                 break;
         }
 
-        // default response when the event isnt handled
         return ResponseEntity.ok("Success");
     }
 
     private void handleAccountUpdated(Account account) {
         if (account == null) {return;}
-        // requirements contains the documents/info this account is missing
         var requirements = account.getRequirements();
         if (requirements == null) {return;}
         String accountId = account.getId();
 
-        // mark account as verified in our db when stripe approves account.
-        // in production we would need to check if requirements is empty.
-        // in test mode we cant add id so we mark the account as verified regardless of missing documents
         if (Boolean.TRUE.equals(account.getDetailsSubmitted())) {
             stripeService.markAccountVerified(accountId);
         }
-        // handle missing documents - must upload soon
         if (!requirements.getCurrentlyDue().isEmpty()) {
-            // TODO: send "Please upload your ID" email to client when email-service is implemented
             stripeService.markAccountPendingVerification(accountId);
         }
-        // handle missing documents - verification will be required soon
         if (!requirements.getEventuallyDue().isEmpty()) {
-            // TODO: send "You will need to upload your ID to avoid account suspension" email to client when email-service is implemented
             stripeService.markAccountPendingVerification(accountId);
         }
-        // handle missing documents - payouts/transfers blocked
         if (!requirements.getPastDue().isEmpty()) {
-            // TODO: send "Your account payouts/transfers are blocked." email to client when email-service is implemented
             stripeService.markAccountDisabled(accountId);
         }
     }
@@ -99,57 +101,88 @@ public class StripeWebhookController {
         if (capability == null) {return;}
 
         String accountId = capability.getAccount();
-        String status = capability.getStatus(); // active, inactive or disabled
-        // in the future we could handle transfers/payouts differently.
-        // capability.getId() returns the type of capability updated
-        // for test reasons we will simplify and just restrict the account when one of these is disabled/inactive
+        String status = capability.getStatus(); 
 
         switch (status) {
             case "active":
-                // capabilities restored
                 stripeService.markAccountActive(accountId);
                 break;
-
             case "inactive":
             case "disabled":
-                // restrict account when stripe removes their transfers/payouts capability
                 stripeService.markAccountDisabled(accountId);
                 break;
-
             default:
                 break;
         }
     }
 
     private void handlePaymentIntentSucceeded(PaymentIntent paymentIntent) {
-        if (paymentIntent == null) {
-            System.out.print("paymentIntent is null");
-            return;
-        }
+        if (paymentIntent == null) return;
 
         String paymentIntentId = paymentIntent.getId();
         Long amount = paymentIntent.getAmountReceived();
         String currency = paymentIntent.getCurrency();
 
-        String postIdStr = paymentIntent.getMetadata().get("post_id");
-        if (postIdStr == null) {
-            System.out.print("postId is null");
-            return;
+        // 1. Tenta obter o booking_id dos metadados para atualizar a reserva
+        Map<String, String> metadata = paymentIntent.getMetadata();
+        String bookingId = metadata.get("booking_id");
+        
+        if (bookingId != null) {
+            notifyBookingService(bookingId, paymentIntentId, "PAID", "Payment successful via Stripe");
+        } else {
+            System.out.println("AVISO: booking_id não encontrado nos metadados do Stripe.");
         }
-        Long postId = Long.valueOf(postIdStr);
 
-        String buyerEmail = paymentIntent.getReceiptEmail();
+        // 2. Lógica existente para guardar histórico na tabela Payments
+        String postIdStr = metadata.get("post_id");
+        if (postIdStr != null) {
+            try {
+                Long postId = Long.valueOf(postIdStr);
+                String buyerEmail = paymentIntent.getReceiptEmail();
+                paymentsService.createPayment(postId, buyerEmail, paymentIntentId, amount, currency);
+            } catch (Exception e) {
+                System.out.println("Failed to create payment record: " + e.getMessage());
+            }
+        }
+    }
+
+    private void handlePaymentIntentFailed(PaymentIntent paymentIntent) {
+        if (paymentIntent == null) return;
+
+        String paymentIntentId = paymentIntent.getId();
+        String errorMessage = "Unknown error";
+        
+        if (paymentIntent.getLastPaymentError() != null) {
+            errorMessage = paymentIntent.getLastPaymentError().getMessage();
+        }
+        
+        Map<String, String> metadata = paymentIntent.getMetadata();
+        String bookingId = metadata.get("booking_id");
+
+        if (bookingId != null) {
+            notifyBookingService(bookingId, paymentIntentId, "FAILED", errorMessage);
+        } else {
+            System.out.println("AVISO: Falha no pagamento mas booking_id não encontrado nos metadados.");
+        }
+    }
+
+    // --- Comunicação HTTP com o Bookings Service ---
+    private void notifyBookingService(String bookingId, String paymentId, String status, String notes) {
+        // NOTA: O URL assume que tens o bookings-service montado com o prefixo '/bookings'
+        // Se a rota for direta, remove o primeiro /bookings/
+        String url = "http://bookings-service:3002/bookings/internal/" + bookingId + "/payment";
+
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("paymentId", paymentId);
+        requestBody.put("status", status);
+        requestBody.put("notes", notes);
+
         try {
-            paymentsService.createPayment(
-                    postId,
-                    buyerEmail,
-                    paymentIntentId,
-                    amount,
-                    currency
-            );
+            System.out.println("A notificar Bookings Service em: " + url);
+            restTemplate.postForEntity(url, requestBody, String.class);
+            System.out.println("Bookings Service notificado com sucesso.");
         } catch (Exception e) {
-            System.out.println("Failed to create payment: " + e.getMessage());
+            System.err.println("ERRO ao chamar Bookings Service: " + e.getMessage());
         }
-
     }
 }

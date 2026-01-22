@@ -80,10 +80,11 @@ public class PostController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    // Adicionei @RequestParam(required = false) String bookingId
     @GetMapping("/{id:[0-9]+}/buy")
-    public ResponseEntity<Map<String, String>> buyPost(@PathVariable Long id) {
+    public ResponseEntity<Map<String, String>> buyPost(@PathVariable Long id, @RequestParam(required = false) String bookingId) {
         try {
-            String checkoutUrl = postService.createCheckoutSession(id);
+            String checkoutUrl = postService.createCheckoutSession(id, bookingId);
             return ResponseEntity.ok(Map.of("url", checkoutUrl));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));

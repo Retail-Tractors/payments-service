@@ -44,7 +44,7 @@ public class PostService {
         postRepository.deleteById(id);
     }
 
-    public String createCheckoutSession(Long postId) throws Exception {
+    public String createCheckoutSession(Long postId, String bookingId) throws Exception {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new RuntimeException("Post not found"));
 
@@ -61,6 +61,22 @@ public class PostService {
 
         if (seller.getStatus().equals("DISABLED")) {
             throw new RuntimeException("Seller is disabled and cannot receive payments");
+        }
+
+        SessionCreateParams.PaymentIntentData.Builder paymentIntentBuilder = SessionCreateParams.PaymentIntentData.builder()
+                .setApplicationFeeAmount(post.getPrice() * 10) // 10% fee
+                .putMetadata("post_id", post.getId().toString())
+                .setReceiptEmail("buyer@example.com")
+                .setTransferData(
+                        SessionCreateParams.PaymentIntentData.TransferData.builder()
+                                .setDestination(stripeAccountId)
+                                .build()
+                );
+
+        // Se tivermos um bookingId, adicionamos aos metadados!
+        // É ISTO QUE PERMITE AO WEBHOOK SABER QUAL A RESERVA
+        if (bookingId != null && !bookingId.isEmpty()) {
+            paymentIntentBuilder.putMetadata("booking_id", bookingId);
         }
 
         SessionCreateParams params = SessionCreateParams.builder()
@@ -82,17 +98,8 @@ public class PostService {
                                                 ).build()
                                 ).build()
                 )
-                .setPaymentIntentData(
-                        SessionCreateParams.PaymentIntentData.builder()
-                                .setApplicationFeeAmount(post.getPrice() * 10)
-                                .putMetadata("post_id", post.getId().toString())
-                                .setReceiptEmail("buyer@example.com")
-                                .setTransferData(
-                                        SessionCreateParams.PaymentIntentData.TransferData.builder()
-                                                .setDestination(stripeAccountId)
-                                                .build()
-                                ).build()
-                ).build();
+                .setPaymentIntentData(paymentIntentBuilder.build())
+                .build();
 
         Session session = Session.create(params);
         String url = session.getUrl();
