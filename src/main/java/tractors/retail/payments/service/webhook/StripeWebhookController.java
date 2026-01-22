@@ -170,6 +170,12 @@ public class StripeWebhookController {
         } else {
             System.out.println("AVISO: Falha no pagamento mas booking_id não encontrado nos metadados.");
         }
+
+        String postIdStr = metadata.get("post_id");
+        if (postIdStr == null) {
+            Long postId = Long.valueOf(postIdStr);
+            postService.updatePostStatus(postId, "FAILED");
+        }
     }
 
     // --- Comunicação HTTP com o Bookings Service ---
