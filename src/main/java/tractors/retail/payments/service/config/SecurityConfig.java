@@ -16,6 +16,14 @@ public class SecurityConfig {
         http
             .csrf(AbstractHttpConfigurer::disable)
             .authorizeHttpRequests(auth -> auth
+                // Swagger / OpenAPI
+                .requestMatchers(
+                    "/swagger-ui.html",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
+                ).permitAll()
+
+                // Stripe callbacks
                 .requestMatchers("/payments/stripe/webhook").permitAll()
                 .requestMatchers("/payments/stripe/success").permitAll()
                 .requestMatchers("/payments/posts/success").permitAll()
