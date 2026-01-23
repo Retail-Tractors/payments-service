@@ -7,8 +7,20 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import tractors.retail.payments.service.services.StripeOnBoardingService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/payments/stripe")
+@Tag(
+    name = "Stripe Onboarding",
+    description = "Endpoints for onboarding owners to Stripe connected accounts"
+)
 public class StripeOnBoardingController {
 
     private final StripeOnBoardingService stripeService;
@@ -17,12 +29,46 @@ public class StripeOnBoardingController {
         this.stripeService = stripeService;
     }
 
+    @Operation(
+        summary = "Onboard owner to Stripe",
+        description = "Creates a Stripe connected account for the authenticated owner and returns an onboarding URL."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "Onboarding link created successfully",
+            content = @Content(
+                mediaType = "text/plain",
+                schema = @Schema(
+                    description = "Stripe onboarding URL",
+                    example = "https://connect.stripe.com/setup/s/xxxxxxxx"
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "400",
+            description = "Error while creating Stripe account or onboarding link",
+            content = @Content(
+                mediaType = "text/plain",
+                schema = @Schema(
+                    description = "Error message",
+                    example = "Error: Invalid email"
+                )
+            )
+        ),
+        @ApiResponse(
+            responseCode = "401",
+            description = "Unauthorized – missing or invalid JWT"
+        )
+    })
     @PostMapping("/onboard")
-    public ResponseEntity<?> onboardOwner(HttpServletRequest request, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<?> onboardOwner(
+            @Parameter(hidden = true) HttpServletRequest request,
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         try {
             Integer userId = Integer.parseInt(jwt.getSubject());
             String email = (String) request.getAttribute("email");
-            String name =  (String) request.getAttribute("name");
+            String name = (String) request.getAttribute("name");
 
             String accountId = stripeService.createConnectedAccount(userId, email, name);
             String onboardingLink = stripeService.generateOnboardingLink(accountId);
@@ -32,7 +78,17 @@ public class StripeOnBoardingController {
         }
     }
 
-    // Simple endpoint to show feedback to user on the browser
+    @Operation(
+        summary = "Onboarding success page",
+        description = "Simple HTML page shown to the user when Stripe onboarding completes successfully."
+    )
+    @ApiResponses({
+        @ApiResponse(
+            responseCode = "200",
+            description = "HTML success page returned",
+            content = @Content(mediaType = "text/html")
+        )
+    })
     @GetMapping("/success")
     public ResponseEntity<String> handleSuccess() {
         String html = """

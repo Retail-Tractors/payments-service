@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 @Entity
 @Table(name = "sellers")
 @Data
@@ -11,30 +13,51 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@Schema(description = "Seller that owns posts and receives payments via Stripe")
 public class Seller {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Schema(description = "Unique identifier of the seller", example = "1")
     private Long id;
 
-    // Retrieved from token, links to the users table from users-service
     @Column(name = "userid", nullable = false, unique = true)
-    private Integer userId; 
+    @Schema(
+        description = "User ID from users-service that this seller is linked to",
+        example = "42"
+    )
+    private Integer userId;
+
+    @Schema(description = "Name of the seller", example = "Tractor Depot Lda")
     private String name;
+
+    @Schema(description = "Email address of the seller", example = "seller@example.com")
     private String email;
 
     @Column(name = "stripe_account_id")
+    @Schema(
+        description = "Stripe connected account ID associated with this seller",
+        example = "acct_1PXXXXXXX"
+    )
     private String stripeAccountId;
-    // we assume the account is verified even tough they still need to send ID to stripe because we are using test mode
-    // in production we wouldnt need this
+
+    @Schema(
+        description = "Indicates whether the seller is considered verified in this system",
+        example = "true"
+    )
     private boolean verified;
 
-    // this status is linked to the real stripe account status
     @Column(nullable = false)
+    @Schema(
+        description = "Current status of the seller account",
+        example = "ACTIVE"
+    )
     private String status;
 
-    // added updatable = false, insertable = false
-    // because the db uses now() as default expression and it cannot change
     @Column(name = "created_at", updatable = false, insertable = false)
+    @Schema(
+        description = "Timestamp when the seller record was created",
+        example = "2025-01-10T12:30:00"
+    )
     private java.time.LocalDateTime createdAt;
 }
