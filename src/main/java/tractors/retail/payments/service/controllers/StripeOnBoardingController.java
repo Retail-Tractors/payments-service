@@ -63,12 +63,11 @@ public class StripeOnBoardingController {
     })
     @PostMapping("/onboard")
     public ResponseEntity<?> onboardOwner(
-            @Parameter(hidden = true) HttpServletRequest request,
             @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         try {
             Integer userId = Integer.parseInt(jwt.getSubject());
-            String email = (String) request.getAttribute("email");
-            String name = (String) request.getAttribute("name");
+            String email = (String) jwt.getClaim("email");
+            String name = (String) jwt.getClaim("name");
 
             String accountId = stripeService.createConnectedAccount(userId, email, name);
             String onboardingLink = stripeService.generateOnboardingLink(accountId);

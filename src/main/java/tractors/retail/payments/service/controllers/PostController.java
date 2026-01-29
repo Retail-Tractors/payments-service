@@ -43,24 +43,12 @@ public class PostController {
     public ResponseEntity<String> paymentSuccess(
             @Parameter(description = "ID of the post that was purchased", example = "1")
             @RequestParam Long postId) {
-        String html = String.format("""
-            <html>
-              <head>
-                <title>Stripe Payment Complete</title>
-                <style>
-                  body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; }
-                  h1 { color: #4CAF50; }
-                  a { text-decoration: none; color: #2196F3; }
-                </style>
-              </head>
-              <body>
-                <h1>Congratulations, you successfully bought the tractor from the post with id:%2d</h1>
-              </body>
-            </html>
-        """, postId);
+        
+        String html = postService.handlePostPurchaseSuccess(postId);
+        
         return ResponseEntity.ok().header("Content-type", "text/html").body(html);
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Payment cancel page",
         description = "Returns an HTML page indicating that the payment for the given post was cancelled."
@@ -73,24 +61,12 @@ public class PostController {
     public ResponseEntity<String> paymentCancel(
             @Parameter(description = "ID of the post whose purchase was cancelled", example = "1")
             @RequestParam Long postId) {
-        String html = String.format("""
-            <html>
-              <head>
-                <title>Stripe Payment Cancellation</title>
-                <style>
-                  body { font-family: Arial, sans-serif; text-align: center; margin-top: 100px; }
-                  h1 { color: red; }
-                  a { text-decoration: none; color: #2196F3; }
-                </style>
-              </head>
-              <body>
-                <h1>You cancelled your purchase from post with the id: %2d</h1>
-              </body>
-            </html>
-        """, postId);
+
+        String html = postService.handlePostPurchaseCancel(postId);
+
         return ResponseEntity.ok().header("Content-type", "text/html").body(html);
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Get all posts",
         description = "Returns a list of all posts that can be purchased."
@@ -106,7 +82,7 @@ public class PostController {
     public List<PostsResponse> getAllPosts() {
         return postService.getAllPosts().stream().map(PostsResponse::from).toList();
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Create a post",
         description = "Creates a new post associated with the authenticated user."
@@ -126,7 +102,7 @@ public class PostController {
         Integer userId = Integer.parseInt(jwt.getSubject());
         return ResponseEntity.ok(postService.createPost(post, userId));
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Get post by ID",
         description = "Returns details of a single post by its ID."
@@ -148,7 +124,7 @@ public class PostController {
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Create checkout session to buy a post",
         description = "Creates a Stripe checkout session URL for buying a post. Optionally links to a booking."
@@ -177,9 +153,11 @@ public class PostController {
             @Parameter(description = "ID of the post to buy", example = "1")
             @PathVariable Long id,
             @Parameter(description = "Optional booking ID associated with this purchase", example = "123")
-            @RequestParam(required = false) String bookingId) {
+            @RequestParam(required = false) String bookingId,
+            @Parameter(hidden = true) @AuthenticationPrincipal Jwt jwt) {
         try {
-            String checkoutUrl = postService.createCheckoutSession(id, bookingId);
+            String userEmail = jwt.getClaim("email");
+            String checkoutUrl = postService.createCheckoutSession(id, bookingId, userEmail);
             return ResponseEntity.ok(Map.of("url", checkoutUrl));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of("error", e.getMessage()));
@@ -187,7 +165,7 @@ public class PostController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("error", e.getMessage()));
         }
     }
-
+    ////////////////////////////////////////////////////////////////////////////////////////////////////////
     @Operation(
         summary = "Delete a post",
         description = "Deletes a post by its ID."
